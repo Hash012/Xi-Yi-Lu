@@ -112,15 +112,18 @@
     - Process给每个程序提供两个关键的抽象：
         - 逻辑控制流(logical control flow): 让每个进程感到自己是独自使用CPU的
         - 私有的地址空间(private address space): 让每个进程感到自己是独自使用整个内存的
-
-5. User and Kernel Modes
+    - 【石】状态： 运行、等待、就绪 --> 进程管理
+    - 并发（存在都开始未结束的过程）、并行（真正同时）
+5. User and Kernel Modes（__硬件的机制__）
     - Kernel: Processes are managed by a __shared__ chunk of OS code called the kernel. Important: the kernel is not a separate process, but rather runs as part of some user process. 
     - CPU的某个control register中有一个mode bit. mode bit置位是，进程处于kernel mode; 否则，进程处于user mode.
+    - 两位不能由软件改的bit 来决定状态, 0 内核态， 3 用户态
     - 运行在kernel mode的进程能够 执行CPU指令集中的任何指令，能否访问系统中的任何内存地址（物理地址访问）
       运行在user mode的进程既不能执行特权指令，也不能直接访问地址空间中kernel区域的数据和代码。
-    - 一个运行应用代码的进程初始状态是在user mode
+    - 一个 __运行应用代码的进程__ 初始状态是在user mode
     - 一个进程从user mode变到kernel mode的唯一方法是exception
     - 每个进程的内核态空间是物理上一块空间的映射，Linux中所有进程/线程都共享同一块内核地址空间；用户态空间则各自在物理上彼此隔离，不过，memory mapped region for shared libraries也是从由公共部分映射得到的
+    - 一部分指令集只能在内核态执行，叫做“特权指令”
     - Linux在启动时会创建一个pid(process id)为0的特殊进程，该进程会创建pid为1的init进程和pid为2的kthreadd进程init是所有用户进程的父进程。
       kthreadd是所有内核线程的父进程
         - 内核线程（也叫内核任务）运行在kernel mode，具有特权。没有用户地址空间，共享同一个内核地址空间。约等于内核进程。一般周期性执行，例如磁盘高速缓存的刷新、网页连接的维护、页面换入换出
@@ -165,3 +168,142 @@
 7. System Call Error Handling
     - typically, 错误的返回值为-1
     - 设置全局变量 errno, to indicate what went wrong
+
+
+## Exceptional Control Flow II (Process Operations)
+1. Process id
+每个进程有一个唯一的正整数PID，可以重用，所以在整个timeline上不是唯一的
+```c
+#include <unistd.h>
+#include <sys/types.h>
+pid_t getpid(void);  //获取当前进程的pid
+pid_t getppid(void); //获取当前进程的父进程的pid
+```
+- pid_t：在types.h中定义，Linux中就是int
+
+2. States of a Process（较为通用，接近linux，但是是较为抽象的通用归纳）
+- New (新建)：进程正在初始化
+- Running (运行)：进程正在CPU上执行
+- Ready (就绪)：进程等待被执行，且迟早(也许一万年)会被调度执行
+- Stopped (暂停)：进程暂停执行，且永远都不会被调度(除非转为Ready)
+- Blocked (阻塞)：进程等待外部事件(如I/O完成)而停止执行，且永远都不会被调度(除非事件完成、转为Ready)
+- Terminated (终止)：进程永久停止执行 
+![20](imgs/20.png)
+其他转换：
+Running状态之外的stopped、Ready进程可以被终止，Blocked可能会屏蔽信号而无法被终止
+![21](imgs/21.png)
+![22](imgs/22.png)
+进程不能直接从Blocked或Stopped状态进入Running状态
+必须先进入Ready状态，等待OS调度
+
+- Linux进程状态（通常是用户进程的情况）
+![23](imgs/23.png)
+(S和D相应于Block)
+Linux 4.14之后，内核线程有一个额外的状态I (idle)，相当于用户进程的S状态。
+    - 查看进程的指令：top、ps
+
+3. Thread
+在同一个进程空间的多个指令流（控制流），共享很多进程资源，变量可以互相访问，切换开销较小（将在“并行”部分详细介绍）
+- Linux上的线程是通过共享地址空间的进程实现的，线程相当于lightweight process，被内核调度。从CPU调度器来讲进程和线程是一样的。
+![24](imgs/24.png)
+
+4. 创建和初始化进程
+![25](imgs/25.png)
+（建一个空的数据结构，再填充每个域?）
+```c
+\\Fork
+#include <unistd.h>
+#include <sys/types.h>
+pid_t fork(void);//Returns: 0 to child, PID of child to parent, -1 on error
+
+```
+![27](imgs/27.png)
+![26](imgs/26.png)
+
+ - Concurrent execution: 逻辑控制流中的指令可以由内核以任意方式进行交错执行
+
+5. Zombie
+    - Kernel并不会在进程终止后立刻将其清理掉。已终止的进程一般会保持在terminated状态，直到被其parent收割（reaped）
+    - 父进程收割已终止的子进程时 内核首先把子进程的exit status发送给父进程，然后抛弃已经终止的进程
+    - __已终止但未被收割的进程称为zombie进程__
+        - 如果父进程退出时没有收割zombie子进程，这些zombie将由init 进程负责收割
+
+    - 长期运行的程序，例如shells或servers（除非特别说明，是指一个进程，而非计算机），应该总是收割他们的 __zombie子进程__。因为即使zombie不在运行，没有消耗CPU资源，他们也消耗了系统的内存资源。
+    
+6. init process 
+- PID为1 
+- 由内核在启动时创建;除非OS关闭，否则永远不会终止
+
+7. Wait_pid ———— 进程如何等待子进程终止？
+```c
+#include <sys/types.h>
+#include <sys/wait.h>
+pid_t waitpid(pid_t pid, int *status, int options);//Returns: PID of child if OK, 0 (if WNOHANG) or -1 on error
+pid_t wait(int *status);
+//wait(&status)是waitpid的简化版，相当于waitpid(-1, &status, 0);
+```
+
+参数：
+- pid：
+    - > 0 等待pid为该值的子进程终止并被收割；
+    - =-1 等待pid为该值的子进程终止并被收割
+- options
+    -  = 0
+        - waitpid的调用进程进入挂起状态，直到它的wait-set中的一个child process终止了；
+        - 如果wait-set中的一个进程在进行waitpid调用的时候已经终止了，那么waitpid立刻返回；
+        
+        Waitpid返回已经终止的child process的PID
+    - WNOHANG: 
+        - 如果wait-set中的任何子进程都还没有终止，那么立即返回，返回值为0
+        - 如果在等待子进程终止的过程的同时，还希望做些有用的工作，这个选项会有用
+    - WUNTRACED: 
+        - 将调用waitpid的进程挂起，直到wait-set中的一个子进程已经变成已终止或者被停止。返回已终止或已停止的子进程PID
+    
+    - Default option：
+    仅当子进程终止时返回
+    - WCONTINUED: 
+    将调用waitpid的进程挂起，直到wait-set中的一个正在运行的子进程终止，或者等待集合中一个被停止的进程收到SIGCONT信号重新开始。
+    - WUNTRACED | WNOHANG : 
+    立刻返回。如果等待集合中的进程都没有被停止或终止，则返回0；如果有一个停止或终止，则返回该进程的PID
+
+    - Options是状态字，32位，每位代表一种配置
+- status: 用于查看被收割子进程的退出状态，为non-NULL(非空指针) 
+
+    __wait.h 中定义了一些 帮助解析status的宏__:
+    - WIFEXITED(status)
+
+        - Returns true if the child terminated normally
+            - via a call to exit or a return.
+    - WEXITSTATUS(status)
+
+        Returns the exit status of a normally terminated child. 
+        This status is only defined if __WIFEXITED__ returned true.  
+
+    - WIFSIGNALED(status)
+
+        Returns true if the child process terminated because of a __signal__ that was not caught
+    - WTERMSIG(status)
+
+        Returns the number of the signal that caused the child process to terminate. 
+        This status is only defined if WIFSIGNALED returned true.
+    
+
+    - WIFSTOPPED(status)
+
+        Returns true if the child that caused the return is currently __stopped__.
+    - WSTOPSIG(status)
+
+        Returns the number of the signal that caused the child to stop. 
+        This status is only defined if __WIFSTOPPED__ returned true.
+    - WIFCONTINUED(status)
+    
+        Returns true if the child was restarted by receipt of a __SIGCONT signal__
+
+- Error conditions
+如果当前进程没有子进程
+返回 –1，并设置errno为ECHILD
+如果该函数的执行被signal中断
+返回–1 ，并设置errno为EINTR
+
+    
+    
