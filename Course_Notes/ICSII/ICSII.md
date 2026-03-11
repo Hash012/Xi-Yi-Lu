@@ -299,11 +299,84 @@ pid_t wait(int *status);
     
         Returns true if the child was restarted by receipt of a __SIGCONT signal__
 
-- Error conditions
-如果当前进程没有子进程
-返回 –1，并设置errno为ECHILD
-如果该函数的执行被signal中断
-返回–1 ，并设置errno为EINTR
+    - 指定输出顺序的场景：
+        ![28](imgs/28.png)
+        ![29](imgs/29.png)
 
+    - Error conditions
+    如果当前进程没有子进程
+    返回 –1，并设置errno为ECHILD
+    如果该函数的执行被signal中断
+    返回–1 ，并设置errno为EINTR(?在wait中才会设置)
+
+8. Putting Process to Sleep
+```c
+#include <unistd.h>
+unsigned int sleep(unsigned int secs); //Returns: seconds left to sleep
+int pause(void);//Always returns -1
+```
+sleep
+    - 挂起一个进程一段时间；
+
+    - 如果请求的时间量已经到了，则返回0；
+        否则返回剩下还要休眠的秒数（如果sleep函数被一个信号中断而过早返回时，会没有休眠足够的时间而提前返回。）
+pause
+    - 让调用函数的进程休眠，直到该进程收到一个信号
     
+![30](imgs/30.png) 
+通过条件分支来使得p0 p1的start有不同
+![31](imgs/31.png)
+
+
+9. 父进程与子进程
+- 父进程等待子进程结束：Waitpid()
+
+- 子进程等待父进程结束
+    - 轮询（polling）
     
+        好处：没有contex switch,节省了这方面的开销。但会一致占用处理器
+
+        ```c
+        While (getppid() != 1)//
+        sleep(1);
+        ```
+        - getppid()返回父进程PID，永远成功返回
+        - 如果一个父进程在其子进程之前结束了，那么这个子进程就会变成孤儿进程 (Orphan Process)。内核会自动将这个孤儿进程“托付”给 init 进程（PID 为 1）。
+    - 或者采用效率更高的信号机制
+
+- 竞争条件
+    ![32](imgs/32.png)
+        - ```setbuf(stdout, NULL)``` 关掉了缓冲区。那么一个进程的输出不能确保连续，可能会被其他进程的输出插入。
+
+        - http://man7.org/linux/man-pages/man3/setbuf.3.html
+    
+    - 先子后父
+        ![33](imgs/33.png)
+    - 先父后子
+        ![34](imgs/34.png)
+        - 避免了下述情况：
+        Shell一行执行多个命令，当父进程结束，就开始执行下一个命令，不管子进程是否执行完。
+        因此child的数据会与parent的随机交叉
+
+- Loading and Running
+```c
+#include <unistd.h>
+int execve(const char *filename, const char *argv[],const char *envp[]);//does not return if OK, returns -1 on error
+```
+在当前进程中装载一个新程序并运行： 
+- 可执行文件 filename 
+- argument list argv
+- environment variable list envp. 
+只有当出错时才返回,例如无法找到 filename. 
+The Execve is called once and never returns
+![35](imgs/35.png)
+![36](imgs/36.png)
+
+- 修改environment variables
+```c
+#include <unistd.h>
+char *getenv(const char *name); //Returns: ptr to name if exists, NULL if no match.
+int setenv(const char *name, const char *newvalue,int overwrite); //Returns: 0 on success, -1 on error.
+void unsetenv(const char *name);//Returns: nothing.
+```
+- key-value stores  的典型的三种操作: CRUD. Create（增）、Retrieve（查）、Update（改）、Delete（删）
