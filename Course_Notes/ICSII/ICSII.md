@@ -377,7 +377,7 @@ pause
         Shell一行执行多个命令，当父进程结束，就开始执行下一个命令，不管子进程是否执行完。
         因此child的数据会与parent的随机交叉
 
-- Loading and Running
+11. Loading and Running
 ```c
 #include <unistd.h>
 int execve(const char *filename, const char *argv[],const char *envp[]);//does not return if OK, returns -1 on error
@@ -400,7 +400,7 @@ void unsetenv(const char *name);//Returns: nothing.
 ```
     - key-value stores  的典型的三种操作: CRUD. Create（增）、Retrieve（查）、Update（改）、Delete（删）
 
-- Unix Shell
+12. Unix Shell
 ![41](imgs/41.png)
 ```c
 /* The main routine for a simple shell program */
@@ -477,13 +477,14 @@ which will eventually be passed to execve
 29    return bg;
 30 }
 
-```
-    - The first argument is assumed to be either the name of a built-in shell command that is interpreted immediately or an executable object file that will be loaded and run in the context of a new child process
-？？？
+```    
+- The first argument is assumed to be either the name of a built-in shell command that is interpreted immediately or an executable object file that will be loaded and run in the context of a new child process
+（ppt上还有shell实现相关的残缺的模板代码，可以先忽略，可以自己实现后就懂了）
 
-- Foreground and Background
+13. Foreground and Background
 ![42](imgs/42.png)
-
+（……for the next command 继续出现提示符，等待输入）
+（……wait for it to complete 等程序运行完）
 
 ## Signal
 1. Signal Terminology
@@ -515,7 +516,7 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
         ![51](imgs/51.png)
         ![52](imgs/52.png)
     2. Receiving a signal
-        - 目标进程接收信号
+        - 目标进程接收信号的时机
             - 当进程从内核态刚切换到用户态时会检查并接受信号；
                 - 检查信号在内核态完成，处理信号在用户态完成，所以是在边界
                 - （稍后讲接受signal的机制）
@@ -527,9 +528,9 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
             - Terminate (e.g., SIGKILL)
             - Stop (e.g., SIGSTOP) or restart (SIGCONT)
             - Catch the signal 
-                - by executing a user-level function called signal handler（由用户编写）
-            （由用户编写？还有对应的吗）
-        - 对于非实时信号standard signal, 不是real-time signal，具有一下特性：
+                - by executing a user-level function called signal handler（通常由用户编写，也有系统默认）
+            
+        - 对于我们讨论的对象，非实时信号standard signal, 不是real-time signal，具有一下特性：
             - Only one
                 某一时刻，某种类型最多有一个pending signal
             - Not queued
@@ -543,7 +544,8 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
                 - 可以发送
                 - 但是pending signal不会被接受
                 - 直到该进程unblock这种signal
-            ![53](imgs/53.png)            
+        - 上面的情况在Internal Data Structures中的表现：
+        ![53](imgs/53.png)            
     
     3. Process Groups
         ![54](imgs/54.png)
@@ -565,11 +567,12 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
     4. kill
     ![56](imgs/56.png)
     ![57](imgs/57.png)
+    ps:查看进程状态
     ![62](imgs/62.png)
 
     5. Sending Signals from the Keyboard
     - Job
-        - Linux/Unix中一个shell命令所创建的进程集合
+        - Linux/Unix中一个shell __命令__ 所创建的进程集合
         - 某一时刻最多有有一个 foreground job，以及0个或多个 background job
         - Shell会为每个job创建一个process group
 
@@ -578,11 +581,82 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
         e.g.
         ```bash
         unix> ls | sort
-        a foreground job consisting of two processes connected by a pipe
+        # a foreground job consisting of two processes connected by a pipe
+        # pipe 通过 | 实现
         ```
         ![58](imgs/58.png)
-        ？？？
-        ![59](imgs/59.png)
-        ![60](imgs/60.png)
-        不会释放内存，不占用cpu
-        ![61](imgs/61.png)
+        shell创建的Job自立门户，其他进程的子进程会和父进程在一个group
+    - ctrl-c
+    ![59](imgs/59.png)
+    - ctrl-z
+    ![60](imgs/60.png)
+    挂起，不会释放内存，不占用cpu
+    ![61](imgs/61.png)
+    w参数：宽输出
+    +：表示该进程正处于前台运行
+    ![63](imgs/63.png)
+    6. Sending Signals with kill Function
+    ```c
+    #include <sys/types.h>
+    #include <signal.h>
+    int kill(pid_t pid, int sig);
+    //returns: 0 if OK, -1 on error
+    /*
+        If pid is greater than zero,
+        - then the kill function sends signal number sig to process pid
+        If pid is less than zero
+        - then kill sends signal sig to every process in process group abs(pid)
+    */
+    ```
+
+    7. Receiving a Signal
+    ![64](imgs/64.png)
+    也可以同在进程A中
+    ![65](imgs/65.png)
+    ![66](imgs/66.png)
+
+    - 嵌套信号处理
+    ![67](imgs/67.png)
+    在信号嵌套中，信号 $t$ 的产生发生在信号 $s$ 的 Handler 执行期间。发送与检查动作始终发生在内核态，而 Handler 的执行始终发生在用户态。
+
+    - 处理方式：
+    Each signal type has a predefined default action, which is one of the following:
+        - The process terminates.
+        - The process terminates and dumps core.
+        - The process stops until restarted by a SIGCONT signal
+        - The process ignores the signal
+        ![68](imgs/68.png)
+        ![69](imgs/69.png)
+    
+    __Signal Function__
+    ```c
+    #include <signal.h>
+    typedef void (*signalhandler_t)(int);//一个指向『参数为 int，返回值为 void』的函数的指针
+    signalhandler_t signal(int signum, signalhandler_t *handler)
+    //returns: ptr to previous handler if OK, SIG_ERR on error (does not set errno)
+        
+    ```
+    Three ways to change default actions:
+        - If handler（第二个参数） is SIG_IGN, then signals of type signum are ignored
+        - If handler is SIG_DFL, then the action for signals of type signum reverts to the default action
+        - Otherwise, change action to handler (called signal handler)
+    辨析：![71](imgs/71.png)
+
+
+    - signal函数的执行阶段
+    ![70](imgs/70.png)
+
+    8. Sending Signals With the alarm Function
+    ```c
+    #include <unistd.h>
+    unsigned int alarm(unsigned int secs);
+    //returns: remaining secs of previous alarm, or 0 if no previous alarm
+    ```
+    Arranges(安装) for the kernel to send a SIGALRM signal to the calling process in secs seconds (给自己设个闹钟)
+    - If secs is zero，any pending alarm is canceled (取消所有闹钟) 
+    - The call to alarm（调用时） 
+        - 取消掉任何待处理的（pending）闹钟
+        - 返回前一个pending alarm剩余的秒数
+        - 如果之前没有pending alarm，返回0
+        - 根据参数设置新的闹钟
+    
