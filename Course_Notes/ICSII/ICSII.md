@@ -164,7 +164,9 @@
             - 将控制权交给新恢复的进程
         - 选择scheduled process的方法叫CPU调度算法
         将在后面单独讲解
-        
+    
+![40](imgs/40.png)
+
 7. System Call Error Handling
     - typically, 错误的返回值为-1
     - 设置全局变量 errno, to indicate what went wrong
@@ -196,6 +198,14 @@ Running状态之外的stopped、Ready进程可以被终止，Blocked可能会屏
 进程不能直接从Blocked或Stopped状态进入Running状态
 必须先进入Ready状态，等待OS调度
 
+- 考虑虚拟内存：
+    ![38](imgs/38.png)
+    $Ready \rightarrow Suspend$ 的情况：所有进程就绪。但内存不够用了。
+    ![39](imgs/39.png)
+
+    - 挂起的过程涉及到交换（Swapping）
+
+
 - Linux进程状态（通常是用户进程的情况）
 ![23](imgs/23.png)
 (S和D相应于Block)
@@ -219,6 +229,15 @@ pid_t fork(void);//Returns: 0 to child, PID of child to parent, -1 on error
 ```
 ![27](imgs/27.png)
 ![26](imgs/26.png)
+- PCB
+![37](imgs/37.png)
+
+    存在内核的部分。
+    操作系统维护一张表，每一项就是一项PCB，标识符就是他的索引。在初始化时就会分配空间、确定最多有多少项，从而确定最多能有几个进程。操作系统启动前管理员可以根据硬件情况来配置。
+    
+    在进程执行过程中，内存指针经常发生变化。
+
+    进程结束后表项会释放，可供再分配。
 
  - Concurrent execution: 逻辑控制流中的指令可以由内核以任意方式进行交错执行
 
@@ -379,4 +398,191 @@ char *getenv(const char *name); //Returns: ptr to name if exists, NULL if no mat
 int setenv(const char *name, const char *newvalue,int overwrite); //Returns: 0 on success, -1 on error.
 void unsetenv(const char *name);//Returns: nothing.
 ```
-- key-value stores  的典型的三种操作: CRUD. Create（增）、Retrieve（查）、Update（改）、Delete（删）
+    - key-value stores  的典型的三种操作: CRUD. Create（增）、Retrieve（查）、Update（改）、Delete（删）
+
+- Unix Shell
+![41](imgs/41.png)
+```c
+/* The main routine for a simple shell program */
+1  #include "csapp.h"
+2  #define MAXARGS 128
+3
+4  /* function prototypes */
+5  void eval(char*cmdline);
+6  int parseline(const char *cmdline, char **argv);
+7  int builtin_command(char **argv);
+8
+9  int main()
+10 {
+11   char cmdline[MAXLINE]; /* command line */
+12
+13   while (1) {
+14     /* read */
+15     printf("> ");
+16     Fgets(cmdline, MAXLINE, stdin);
+17     if (feof(stdin))
+18       exit(0);
+19
+20     /* evaluate */
+21     eval(cmdline);
+22   }
+23 }
+
+1  /* eval - evaluate a command line */
+2  void eval(char *cmdline)
+3  {
+4    char *argv[MAXARGS]; /* argv for execve() */
+5    char buf[MAXLINE]; /* holds modified cmd line */
+6    int bg; /* should the job run in bg or fg? */
+7    pid_t pid; /* process id */
+8
+9    strcpy(buf, cmdline);
+10   bg = parseline(buf, argv);
+11   if (argv[0] == NULL)
+12     return; /* ignore empty lines */
+13
+
+/* 
+Parses the space separated command-line arguments and builds the argv vector
+which will eventually be passed to execve
+*/
+1  /* parse the cmd line and build the argv array */
+2  int parseline(const char *cmdline, char **argv)
+3  {
+4    char *delim; /* first space delimiter */
+5    int argc; /* number of args */
+6    int bg; /* background job? */
+7
+8    buf[strlen(buf)-1] = ’ ’;   /* replace trailing ’\n’ with space */
+12   while (*buf && (*buf == ’ ’)) /* ignore spaces */
+13     buf++;
+14
+12    /* build the argv list */
+13    argc = 0;
+14    while ((delim = strchr(buf, ’ ’))) {
+15      argv[argc++] = buf;
+16      *delim = ’\0’; /* replace space with ’\0’*/
+17      buf = delim + 1;
+18      while (*buf && (*buf == ’ ’)) /* ignore spaces */
+19        buf++;
+20    }
+21    argv[argc] = NULL; /* set the end of argv list */
+22
+23    if (argc == 0) /* ignore blank line */
+24      return 1;
+25
+26    /* should the job run in the background? */
+27    if ((bg = (*argv[argc-1] == ’&’)) != 0)
+28      argv[--argc] = NULL;
+29    return bg;
+30 }
+
+```
+    - The first argument is assumed to be either the name of a built-in shell command that is interpreted immediately or an executable object file that will be loaded and run in the context of a new child process
+？？？
+
+- Foreground and Background
+![42](imgs/42.png)
+
+
+## Signal
+1. Signal Terminology
+![43](imgs/43.png)
+![44](imgs/44.png)
+![45](imgs/45.png)
+![46](imgs/46.png)
+![47](imgs/47.png)
+- Linux Signals
+![48](imgs/48.png)
+Linux系统共定义了64种信号
+
+https://www.man7.org/linux/man-pages/man7/signal.7.html
+
+- 不可靠信号： 也称为非实时信号，standard signal
+    - 不支持排队，信号可能会丢失, 比如发送多次相同的信号, 进程只能收到一次
+    - 信号值取值区间为1~31
+- 可靠信号： 也称为实时信号，real-time signal
+    - 支持排队, 信号不会丢失, 发多少次, 就可以收到多少次
+    - 信号值取值区间为32~64
+用户可以自定义这些信号
+![49](imgs/49.png)
+特殊：10和12要由用户自定义
+![50](imgs/50.png)
+
+
+2. Two steps to transfer a signal to a destination process：Sending a signal  Receiving a signal
+    1. Sending a signal
+        ![51](imgs/51.png)
+        ![52](imgs/52.png)
+    2. Receiving a signal
+        - 目标进程接收信号
+            - 当进程从内核态刚切换到用户态时会检查并接受信号；
+                - 检查信号在内核态完成，处理信号在用户态完成，所以是在边界
+                - （稍后讲接受signal的机制）
+            - 在内核态，信号不起作用；
+            - 在用户态，所有未被屏蔽的信号都处理完毕；
+        
+        - 对于收到的信号，进程可以有4种处理方式：（1，4常见）
+            - Ignore the signal (e.g., SIGCHILD)
+            - Terminate (e.g., SIGKILL)
+            - Stop (e.g., SIGSTOP) or restart (SIGCONT)
+            - Catch the signal 
+                - by executing a user-level function called signal handler（由用户编写）
+            （由用户编写？还有对应的吗）
+        - 对于非实时信号standard signal, 不是real-time signal，具有一下特性：
+            - Only one
+                某一时刻，某种类型最多有一个pending signal
+            - Not queued
+                - 如果一个进程已经有一个类型 k的pending signal，之后发送的signal k不会排队，而是直接被丢弃.
+        - Pending Signal
+            已经发送，但还没有接受的信号，叫做pending signal
+
+        - Blocking a Signal
+            - 进程可以选择性block特定信号的接收
+            - 当一个信号被block时
+                - 可以发送
+                - 但是pending signal不会被接受
+                - 直到该进程unblock这种signal
+            ![53](imgs/53.png)            
+    
+    3. Process Groups
+        ![54](imgs/54.png)
+        ```c
+        #include <unistd.h>
+        pid_t getpgrp(void);
+        // returns: process group ID of the calling process
+        #include <unistd.h>
+        pid_t setpgid(pid_t pid, pid_t pgid);
+        // returns: 0 on success, -1 on error
+        ```
+        - setpgid
+            - 把进程pid的进程组设置为pgid
+            - 如果pid=0, 那就是指当前进程
+            - 如果pgid=0，那就是用pid作为进程组ID
+                - 相当于“自立门户”
+        ![55](imgs/55.png)
+    
+    4. kill
+    ![56](imgs/56.png)
+    ![57](imgs/57.png)
+    ![62](imgs/62.png)
+
+    5. Sending Signals from the Keyboard
+    - Job
+        - Linux/Unix中一个shell命令所创建的进程集合
+        - 某一时刻最多有有一个 foreground job，以及0个或多个 background job
+        - Shell会为每个job创建一个process group
+
+        通常，process group ID 来自job中的某个parent process
+        
+        e.g.
+        ```bash
+        unix> ls | sort
+        a foreground job consisting of two processes connected by a pipe
+        ```
+        ![58](imgs/58.png)
+        ？？？
+        ![59](imgs/59.png)
+        ![60](imgs/60.png)
+        不会释放内存，不占用cpu
+        ![61](imgs/61.png)

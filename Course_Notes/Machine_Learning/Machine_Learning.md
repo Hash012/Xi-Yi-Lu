@@ -131,7 +131,7 @@
             
         
 
-### 2. Frequent Pattern Analysis
+### 2. Frequent Pattern Analysis - Set - Association Rule
 ![7](imgs/7.png)
 1. Association Rule Discovery
     1. 规则：${x1，x2，…,xn} \rightarrow Y$
@@ -187,3 +187,94 @@
 
     10. Bottleneck of Frequent-pattern Learning
     ![16](imgs/16.png)
+
+
+### 3. Frequent Pattern Analysis - sequence - Association Rule
+![17](imgs/17.png)
+1. 定义：
+    - 项集(Itemset)：是各种项目组成的集合
+    - 序列(Sequence)：是不同项目集(ItemSet)的有序排列，序列s可以表示为```s = <s1s2…sm>，sj(1 <= j <= m)为项目集(Itemset)，也称为序列s的元素```
+    - 序列的长度：一个序列中包含的项目集的个数
+    ![18](imgs/18.png)
+    - 子序列：
+    ![19](imgs/19.png)
+    - 序列的支持度：
+    ![20](imgs/20.png)
+    - 频繁序列：
+    ![21](imgs/21.png)
+    - 项集的支持度
+    ![22](imgs/22.png)
+    （Large itemset：频繁项集）
+2. GSP算法
+    ![23](imgs/23.png)
+    Five phases
+    - Sort phase
+        Sort the database with customer-id as the major key and transaction-time as the minor key
+        
+    - Large itemset phase
+        ![24](imgs/24.png)
+    - Transformation phase
+        ![25](imgs/25.png)
+    - Sequence phase
+        Use the set of litemsets to find the large sequence (frequent sequence).
+        
+    - Maximal phase
+        - Find the maximum sequences among the set of large sequences.
+        - In some algorithms, this phase is combined with the sequence phase.
+        ```c
+        for (k = n; k > 1; k--) do
+             foreach k-sequence sk do
+                  Delete from S all subsequences of sk
+        /*
+        Algorithm:
+        S   the set of all large sequences
+        n  the length of the longest sequence   
+        */
+        ```
+
+3. AprioriAll算法
+    The basic method to mine sequential patterns
+    Based on the Apriori algorithm.
+    Count all the large sequences, including non-maximal sequences.
+    Use Apriori-generate function to generate candidate sequence.
+    ![26](imgs/26.png)
+    ![28](imgs/28.png)
+    * Pruning Phase
+    
+    eg.
+    ![27](imgs/27.png)
+    ![29](imgs/29.png)
+    
+    - Judgement
+    Waste too much time in counting non-maximal sequence, which is impossible to be a sequential pattern.
+    
+4. AprioriSome
+    It generates candidates for a pass using only the large sequences found in the previous pass.
+    Divided into 2 phase: 
+            forward vs. backward
+    Advantage: 
+        Reduce counting time wasted in counting non-maximal ones.
+    - cont.
+    ![30](imgs/30.png)
+    ![31](imgs/31.png)
+    ![32](imgs/32.png)
+    ![33](imgs/33.png)
+
+- 发展：
+    $AprioriAll \rightarrow AprioriSome \rightArrow GSP$
+
+5. 发现序列规则
+    - 部分序序列规则Partially-Ordered Sequential rule：
+    ![34](imgs/34.png)
+    - Two properties:
+        ![35](imgs/35.png)
+    - 序列规则查找：
+        ![36](imgs/36.png)
+        ![37](imgs/37.png)
+    
+    - Algorithm：CMRules algorithm
+        ![38](imgs/38.png)
+        ![39](imgs/39.png)
+        ![40](imgs/40.png)
+        顺序检查：顺序支持度、顺序置信度
+
