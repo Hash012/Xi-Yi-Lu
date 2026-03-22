@@ -231,7 +231,7 @@
         n  the length of the longest sequence   
         */
         ```
-
+    !!??有疑问，这里是GSP的终点吗
 3. AprioriAll算法
     The basic method to mine sequential patterns
     Based on the Apriori algorithm.

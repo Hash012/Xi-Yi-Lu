@@ -633,12 +633,12 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
     #include <signal.h>
     typedef void (*signalhandler_t)(int);//一个指向『参数为 int，返回值为 void』的函数的指针
     signalhandler_t signal(int signum, signalhandler_t *handler)
-    //returns: ptr to previous handler if OK, SIG_ERR on error (does not set errno)
+    //returns: ptr to previous handler（这次设置之前的） if OK, SIG_ERR on error (does not set errno)
         
     ```
     Three ways to change default actions:
         - If handler（第二个参数） is SIG_IGN, then signals of type signum are ignored
-        - If handler is SIG_DFL, then the action for signals of type signum reverts to the default action
+        - If handler is SIG_DFL, then the action for signals of type signum reverts to the default action（起到恢复默认的作用）
         - Otherwise, change action to handler (called signal handler)
     辨析：![71](imgs/71.png)
 
@@ -659,4 +659,126 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
         - 返回前一个pending alarm剩余的秒数
         - 如果之前没有pending alarm，返回0
         - 根据参数设置新的闹钟
+
+    e.g.![alt text](imgs/72.png)
+
+
+    9. 编写signal hander的要求
+        - 编写简短、逻辑简单的signal handler
+        - 在signal handler中只调用async-signal-safe functions
+            - 可重入(reentrant)或者不能被signal中断的函数
+        - 在handler中保存errno，并在返回前恢复errno
+            - 避免handler中对error的修改影响其他程序
+        - 如要访问全局数据结构，应block其他signal
+        - 将全局变量声明为volatile和原子变量
+    ![73](imgs/73.png)
+    ![74](imgs/74.png)
+    10. sigaction Function
+    ![75](imgs/75.png)
+    基于sigaction的更安全的Signal函数实现：
+    ```c
+    handler_t *Signal(int signum, handler_t *handler)
+    {
+        // 声明两个结构体：action 用于设置新的信号行为，old_action 用于接收保存旧的信号行为
+        struct sigaction action, old_action; 
+
+        // 1. 绑定处理函数：将用户传入的函数指针（handler）赋给新的信号处理动作
+        action.sa_handler = handler;         
+
+        /* block sigs of type being handled */
+        // 2. 清空信号掩码：这意味着在当前信号处理函数执行期间，除了该信号本身会被系统默认阻塞外，不会去主动阻塞其他类型的信号
+        sigemptyset(&action.sa_mask);        
+
+        /* restart syscalls if possible */
+        // 3. 设置重启标志：这是最关键的一步。如果进程在执行 read/wait 等慢速系统调用时被该信号打断，处理完信号后系统会自动重新启动该系统调用，而不是直接报错返回 EINTR
+        action.sa_flags = SA_RESTART;        
+
+        // 4. 执行注册：调用底层的 sigaction 函数。
+        // 将 signum 信号的处理动作设置为 action，同时把以前的旧动作保存到 old_action 指针指向的内存中
+        if (sigaction(signum, &action, &old_action) < 0)
+            unix_error("Signal error");      // 如果 sigaction 调用失败（返回值小于0），则调用自定义的错误包装函数报错并退出
+
+        // 5. 返回旧状态：将保存下来的旧信号处理函数指针返回。这完美模拟了 C 标准库中原生 signal() 函数的返回值行为
+        return (old_action.sa_handler);      
+    }
+    ```
+    - 只有正在被处理的信号类型被屏蔽，同类型信号无法嵌套
+    - 在所有版本的signal实现中，信号都不支持排队
+    - 被中断的系统调用，会在可以的时候自动重新执行
+    - 一旦通过signal函数注册信号对应的处理函数，只有当再次调用signal函数，并将handler指定为SIG_IGN或SIG_DFL才能取消
+        - SIG_IGN：忽略信号
+        - SIG_DFL：恢复默认处理方式
+    
+    signal()：不支持信号传递信息，主要用于非实时信号安装；
+    sigaction():支持信号传递信息，可用于所有信号安装；
+    用信号传递数据性能很有限，一般不推荐。
+        
+    11. Explicitly Blocking Signals
+    ![76](imgs/76.png)
+    __sigprocmask__
+    改变当前屏蔽信号集合（blocked bit vector）的状态
+    - SIG_BLOCK: add the signals in set to blocked (blocked = blocked | set )
+    - SIG_UNBLOCK: Remove the signals in set from blocked (blocked = blocked & ~set)
+    - SIG_SETMASK: blocked = set
+    - If oldset is non-NULL, the previous value of the blocked bit vector is stored in oldset
+    
+    __Signal set__
+    - Sigemptyset：将set每一个bit设置为0
+    - Sigfillset ：将set每一个bit设置为1
+    - Sigaddset ：在set中增加一个屏蔽信号
+    - Sigdelset：在set中删除一个屏蔽信号
+    e.g.
+
+    ![77](imgs/77.png)
+
+    ![alt text](imgs/78.png) ![alt text](imgs/79.png)
+
+    12. Explicitly Waiting for Signals
+    - Program is correct, but very wasteful
+    ```c
+    volatile sig_atomic_t pid;
+    
+    void sigchld_handler(int s)
+    {
+        int olderrno = errno;
+        pid = Waitpid(-1, NULL, 0); /* Main is waiting for nonzero pid */
+        errno = olderrno;
+    }
+    
+    void sigint_handler(int s)
+    {
+    }
+    int main(int argc, char **argv) {
+        sigset_t mask, prev;
+        Signal(SIGCHLD, sigchld_handler);
+        Signal(SIGINT, sigint_handler);
+        Sigemptyset(&mask);
+        Sigaddset(&mask, SIGCHLD);
+    
+        while (1) {
+        Sigprocmask(SIG_BLOCK, &mask, &prev); /* Block SIGCHLD */
+        if (Fork() == 0) /* Child无论何时，无论何地，只要一个子进程终止了操作系统内核都会立刻、自动地向它的父进程发送一个*/
+        
+                           exit(0);
+        /* Parent */
+        pid = 0;
+        Sigprocmask(SIG_SETMASK, &prev, NULL); /* Unblock SIGCHLD */
+    
+        /* Wait for SIGCHLD to be received (wasteful!) ，会被signal打断*/
+        while (!pid);
+        /* Do some work after receiving SIGCHLD */
+                       printf(".");
+        }
+        exit(0);
+    }
+    ```
+    ![80](imgs/80.png)
+    - sigsuspend
+    ```c
+    int sigsuspend(const sigset_t *mask)
+    // e.g.
+    sigprocmask(SIG_SETMASK, &mask, &prev);
+    pause();
+    sigprocmask(SIG_SETMASK, &prev, NULL);    
+    ```
     
