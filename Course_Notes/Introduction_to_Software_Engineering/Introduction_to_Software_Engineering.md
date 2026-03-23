@@ -212,3 +212,14 @@
 ![工具](img/67.png)
 
 ![68](img/68.png)
+
+
+### 软件需求工程基础
+![alt text](img/69.png) ![alt text](img/70.png) ![alt text](img/71.png) ![alt text](img/72.png) ![alt text](img/73.png)
+1. 需求工程
+![alt text](img/74.png) ![alt text](img/75.png)
+2. 结构化需求建模和分析方法
+![alt text](img/76.png) ![alt text](img/77.png) ![alt text](img/78.png) ![alt text](img/79.png) ![alt text](img/80.png) ![alt text](img/81.png) ![alt text](img/82.png) ![alt text](img/83.png) ![alt text](img/84.png) ![alt text](img/85.png) ![alt text](img/86.png) ![alt text](img/87.png)
+
+3. 需求工程的输出软件需求制品
+![alt text](img/88.png) ![alt text](img/89.png) ![alt text](img/90.png)

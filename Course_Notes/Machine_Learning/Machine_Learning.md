@@ -214,6 +214,7 @@
     - Large itemset phase
         ![24](imgs/24.png)
     - Transformation phase
+    要将项集展开计算（如：Transformed Customer Sequence）
         ![25](imgs/25.png)
     - Sequence phase
         Use the set of litemsets to find the large sequence (frequent sequence).
@@ -261,7 +262,7 @@
     ![33](imgs/33.png)
 
 - 发展：
-    $AprioriAll \rightarrow AprioriSome \rightArrow GSP$
+    $AprioriAll \rightarrow AprioriSome \rightarrow GSP$
 
 5. 发现序列规则
     - 部分序序列规则Partially-Ordered Sequential rule：
@@ -278,3 +279,27 @@
         ![40](imgs/40.png)
         顺序检查：顺序支持度、顺序置信度
 
+
+### 4. Frequent Pattern Analysis - graph
+![alt text](imgs/41.png) ![alt text](imgs/42.png)
+Proximity on Graph: What?  Relevance Closeness Similarity
+![43](imgs/43.png)
+![alt text](imgs/44.png)
+![alt text](imgs/45.png)
+![alt text](imgs/46.png)
+
+### 5. Writebased Association Mining(重点结合原ppt&bilibili复习)
+1. ![alt text](imgs/47.png)
+为优化-VIPER：
+Implement DFS with bitmap compression of data in vertical format
+![alt text](imgs/48.png)
+![alt text](imgs/50.png)
+2. FP-Growth
+![alt text](imgs/49.png)
+![alt text](imgs/51.png) ![alt text](imgs/52.png) ![alt text](imgs/53.png) ![alt text](imgs/54.png) ![alt text](imgs/55.png) ![alt text](imgs/56.png) ![alt text](imgs/57.png) ![alt text](imgs/58.png) ![alt text](imgs/59.png) ![alt text](imgs/60.png) ![alt text](imgs/61.png) ![alt text](imgs/62.png) ![alt text](imgs/63.png) ![alt text](imgs/64.png)
+
+### 6. Writebased Sequential Pattern Discovery
+![alt text](imgs/65.png) ![alt text](imgs/66.png) ![alt text](imgs/67.png)
+
+### 7. Writebased Sub-Graph Mining
+![alt text](imgs/68.png)

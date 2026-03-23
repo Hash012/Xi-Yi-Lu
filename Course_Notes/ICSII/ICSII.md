@@ -646,6 +646,7 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
     - signal函数的执行阶段
     ![70](imgs/70.png)
 
+    在父进程为信号设置的handleer在子进程也是有效的
     8. Sending Signals With the alarm Function
     ```c
     #include <unistd.h>
@@ -758,16 +759,15 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
         while (1) {
         Sigprocmask(SIG_BLOCK, &mask, &prev); /* Block SIGCHLD */
         if (Fork() == 0) /* Child无论何时，无论何地，只要一个子进程终止了操作系统内核都会立刻、自动地向它的父进程发送一个*/
-        
-                           exit(0);
+            exit(0);
         /* Parent */
         pid = 0;
         Sigprocmask(SIG_SETMASK, &prev, NULL); /* Unblock SIGCHLD */
     
         /* Wait for SIGCHLD to be received (wasteful!) ，会被signal打断*/
-        while (!pid);
+        while (!pid);// 忙等 busy wait
         /* Do some work after receiving SIGCHLD */
-                       printf(".");
+        printf(".");
         }
         exit(0);
     }
@@ -782,3 +782,27 @@ https://www.man7.org/linux/man-pages/man7/signal.7.html
     sigprocmask(SIG_SETMASK, &prev, NULL);    
     ```
     
+![alt text](imgs/87.png)
+![alt text](imgs/88.png)
+## CPU 调度
+1. 调度策略
+    1. First In, First Out (FIFO)
+        ![alt text](imgs/89.png) ![alt text](imgs/90.png)
+    2. Shortest Job First (SJF)
+        ![alt text](imgs/91.png) ![alt text](imgs/92.png)
+    3. Shortest Time-to-Completion First (STCF) 
+        ![alt text](imgs/93.png)
+        ![alt text](imgs/94.png)
+
+
+    ![alt text](imgs/95.png)
+    ![alt text](imgs/97.png) ![alt text](imgs/98.png)
+
+    以上调度算法的共同问题：
+        - 假设预先知道每个任务的执行时间（预约式）
+        - 但实际上我们一般是没法预知的
+    4. Multi-Level Feedback Queue (MLFQ)
+        ![alt text](imgs/99.png)
+        ![alt text](imgs/100.png)
+        ![alt text](imgs/101.png) ![alt text](imgs/102.png) ![alt text](imgs/103.png)    
+        
